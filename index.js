@@ -5,7 +5,9 @@ const connectDB = require('./config/db');
 
 const userRoutes = require('./routes/userRoutes');
 const codeforcesRoutes = require('./routes/codeforcesRoutes');
-const leetcodeRoutes = require('./routes/leetcodeRoute');
+const leetcodeRoutes = require('./routes/leetcodeRoutes');
+const bookmarkRoutes = require('./routes/bookmarkRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 const PORT = 5000;
@@ -17,6 +19,8 @@ app.use(express.json());
 app.use('/api/users', userRoutes);
 app.use('/api/codeforces', codeforcesRoutes);
 app.use('/api/leetcode', leetcodeRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/', (req, res) => {
     res.send('Server is running successfully!');
