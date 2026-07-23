@@ -31,5 +31,19 @@ const getBookmarks = async (req, res) => {
         res.status(500).json({message: "Failed to fetch bookmarks", error:error.message});
     }
 }
+const deleteBookmark = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const bookmark = await Bookmark.findOneAndDelete({ _id: id, user: req.user._id });
+        
+        if (!bookmark) {
+            return res.status(404).json({ message: "Bookmark not found or unauthorized" });
+        }
+        
+        res.status(200).json({ message: "Bookmark deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to delete bookmark", error: error.message });
+    }
+};
 
-module.exports = {addBookmark, getBookmarks};
+module.exports = { addBookmark, getBookmarks, deleteBookmark };

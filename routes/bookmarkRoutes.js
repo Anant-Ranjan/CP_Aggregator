@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const {addBookmark, getBookmarks} = require('../controllers/bookmarkController');
+const {addBookmark, getBookmarks, deleteBookmark} = require('../controllers/bookmarkController');
 const {protect} = require('../middleware/authMiddleware');
 
 router.post('/', protect, addBookmark);
 
 router.get('/', protect, getBookmarks);
+router.delete('/:id', protect, deleteBookmark);
 
 module.exports = router;

@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const connectDB = require('./config/db');
+const cors = require('cors');
 
 const userRoutes = require('./routes/userRoutes');
 const codeforcesRoutes = require('./routes/codeforcesRoutes');
@@ -15,7 +16,7 @@ const PORT = 5000;
 connectDB();
 
 app.use(express.json());
-
+app.use(cors());
 app.use('/api/users', userRoutes);
 app.use('/api/codeforces', codeforcesRoutes);
 app.use('/api/leetcode', leetcodeRoutes);
