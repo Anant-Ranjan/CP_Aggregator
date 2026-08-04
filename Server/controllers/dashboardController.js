@@ -1,5 +1,5 @@
 const axios = require('axios');
-const Bookmark = require('../models/Bookmark');
+const Bookmark = require('../models/bookmark');
 
 const getDashboardSummary = async (req, res) => {
     try {
@@ -11,12 +11,29 @@ const getDashboardSummary = async (req, res) => {
 
         if (codeforcesHandle) {
             requests.push(axios.get(`https://codeforces.com/api/user.info?handles=${codeforcesHandle}`));
+            requests.push(axios.get(`https://codeforces.com/api/user.rating?handle=${codeforcesHandle}`));
         } else {
             requests.push(Promise.resolve(null));
+            requests.push(Promise.resolve(null)); 
         }
 
         if (leetcodeHandle) {
-            const lcQuery = `query getUserProfile($username: String!) { matchedUser(username: $username) { submitStats: submitStatsGlobal { acSubmissionNum { difficulty count } } } }`;
+            const lcQuery = `
+                query getUserData($username: String!) { 
+                    matchedUser(username: $username) { 
+                        submitStats: submitStatsGlobal { 
+                            acSubmissionNum { difficulty count } 
+                        } 
+                    }
+                    userContestRankingHistory(username: $username) {
+                        attended
+                        rating
+                        contest {
+                            title
+                        }
+                    }
+                }
+            `;
             requests.push(axios.post('https://leetcode.com/graphql', 
                 { query: lcQuery, variables: { username: leetcodeHandle } },
                 { headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
@@ -25,7 +42,7 @@ const getDashboardSummary = async (req, res) => {
             requests.push(Promise.resolve(null));
         }
         
-        const [bookmarkRes, cfRes, lcRes] = await Promise.allSettled(requests);
+        const [bookmarkRes, cfInfoRes, cfHistoryRes, lcRes] = await Promise.allSettled(requests);
 
         const dashboardData = {
             user: { username, email, codeforcesHandle, leetcodeHandle },
@@ -34,24 +51,51 @@ const getDashboardSummary = async (req, res) => {
             leetcode: null
         };
         
-        if (codeforcesHandle && cfRes.status === 'fulfilled' && cfRes.value) {
-            const cfData = cfRes.value.data.result[0];
+        if (codeforcesHandle && cfInfoRes.status === 'fulfilled' && cfInfoRes.value) {
+            const cfData = cfInfoRes.value.data.result[0];
+            
+            let formattedHistory = [];
+            if (cfHistoryRes.status === 'fulfilled' && cfHistoryRes.value) {
+                const rawHistory = cfHistoryRes.value.data.result;
+                formattedHistory = rawHistory.slice(-15).map(contest => ({
+                    contestName: contest.contestName,
+                    rating: contest.newRating
+                }));
+            }
+
             dashboardData.codeforces = {
                 rating: cfData.rating || 0,
                 rank: cfData.rank || "Unrated",
-                maxRating: cfData.maxRating || 0
+                maxRating: cfData.maxRating || 0,
+                ratingHistory: formattedHistory 
             };
         }
         
         if (leetcodeHandle && lcRes.status === 'fulfilled' && lcRes.value) {
-            const matchedUser = lcRes.value.data.data.matchedUser;
+            const responseData = lcRes.value.data.data;
+            const matchedUser = responseData.matchedUser;
+            const contestHistory = responseData.userContestRankingHistory;
+
             if (matchedUser) {
                 const stats = matchedUser.submitStats.acSubmissionNum;
+                
+                let formattedLcHistory = [];
+                if (contestHistory) {
+                    formattedLcHistory = contestHistory
+                        .filter(contest => contest.attended)
+                        .slice(-15)
+                        .map(contest => ({
+                            contestName: contest.contest.title,
+                            rating: Math.round(contest.rating) 
+                        }));
+                }
+
                 dashboardData.leetcode = {
                     totalSolved: stats[0].count,
                     easy: stats[1].count,
                     medium: stats[2].count,
-                    hard: stats[3].count
+                    hard: stats[3].count,
+                    ratingHistory: formattedLcHistory
                 };
             }
         }
