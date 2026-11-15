@@ -90,11 +90,12 @@ const getDashboardSummary = async (req, res) => {
                         }));
                 }
 
+                const getCount = (level) => stats.find(s => s.difficulty === level)?.count || 0;
                 dashboardData.leetcode = {
-                    totalSolved: stats[0].count,
-                    easy: stats[1].count,
-                    medium: stats[2].count,
-                    hard: stats[3].count,
+                    totalSolved: getCount('All'),
+                    easy: getCount('Easy'),
+                    medium: getCount('Medium'),
+                    hard: getCount('Hard'),
                     ratingHistory: formattedLcHistory
                 };
             }

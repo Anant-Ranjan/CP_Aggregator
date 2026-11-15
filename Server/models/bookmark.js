@@ -9,7 +9,7 @@ const bookmarkSchema = new mongoose.Schema({
     platform: {
         type: String,
         required: true,
-        enum: ['Codeforces', 'LeetCode']
+        enum: ['Codeforces', 'LeetCode', 'Other']
     },
     problemName: {
         type: String,

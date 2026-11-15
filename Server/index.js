@@ -11,12 +11,12 @@ const bookmarkRoutes = require('./routes/bookmarkRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 connectDB();
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
 app.use('/api/users', userRoutes);
 app.use('/api/codeforces', codeforcesRoutes);
 app.use('/api/leetcode', leetcodeRoutes);
