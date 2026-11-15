@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - cp-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - cp-network
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=5001
+      - MONGO_URI=mongodb://mongo:27017/cp_users
+      - JWT_SECRET=super_secret_string_only_the_server_knows_123
+    depends_on:
+      - mongo
+    networks:
+      - cp-network
+
+  codeforces-service:
+    build:
+      context: ./services/codeforces-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=5002
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LEADERBOARD_SERVICE_URL=http://leaderboard-service:5005
+    depends_on:
+      - redis
+      - leaderboard-service
+    networks:
+      - cp-network
+
+  leetcode-service:
+    build:
+      context: ./services/leetcode-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=5003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LEADERBOARD_SERVICE_URL=http://leaderboard-service:5005
+    depends_on:
+      - redis
+      - leaderboard-service
+    networks:
+      - cp-network
+
+  bookmark-service:
+    build:
+      context: ./services/bookmark-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=5004
+      - MONGO_URI=mongodb://mongo:27017/cp_users
+    depends_on:
+      - mongo
+    networks:
+      - cp-network
+
+  leaderboard-service:
+    build:
+      context: ./services/leaderboard-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=5005
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - cp-network
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - JWT_SECRET=super_secret_string_only_the_server_knows_123
+      - CLIENT_URL=http://localhost:5173
+      - USER_SERVICE_URL=http://user-service:5001
+      - CF_SERVICE_URL=http://codeforces-service:5002
+      - LC_SERVICE_URL=http://leetcode-service:5003
+      - BOOKMARK_SERVICE_URL=http://bookmark-service:5004
+      - LEADERBOARD_SERVICE_URL=http://leaderboard-service:5005
+    depends_on:
+      - user-service
+      - codeforces-service
+      - leetcode-service
+      - bookmark-service
+      - leaderboard-service
+    networks:
+      - cp-network
+
+networks:
+  cp-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
