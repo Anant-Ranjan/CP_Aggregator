@@ -20,6 +20,7 @@
 | **Phase 5** | Microservice split behind API Gateway (6 services) | ✅ Completed | All 6 services compile & build cleanly |
 | **Phase 6** | Frontend TypeScript migration & Leaderboard UI | ✅ Completed | React 19 TS migration, parallel fetch, Vite build pass |
 | **Active Runtime** | Microservices & Client local background execution | 🟢 LIVE | All 6 services (5000-5005) & Client (5173) running |
+| **Public Live Tunnel** | Worldwide HTTPS deployment via reverse proxy | 🌍 LIVE | https://baa8046806fc8c.app.lhr.life |
 | **Phase 7** | Docker containerization & Docker Compose | ✅ Completed | Multi-stage Dockerfiles & compose orchestration verified |
 
 ---
