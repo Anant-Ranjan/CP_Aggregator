@@ -1,172 +1,223 @@
 # CP Aggregator — Service-Oriented Upgrade: Migration Log
 
+> **Repository Root:** `CP_Aggregator/`  
 > **Started:** 2026-11-15 18:25 IST  
-> **Last Updated:** 2026-11-16 02:08 IST  
+> **Last Updated:** 2026-11-16 02:22 IST  
 > **Git Branch:** `main`  
-> **Executor:** Antigravity AI (Gemini 3.8 Flash High / Claude Sonnet 4.6 Thinking swarm)
+> **Current Head Commit:** `42f1e53` (`feat: complete Phase 5 (microservice split behind API Gateway) and Phase 6 (frontend TypeScript + Leaderboard UI)`)  
+> **Status:** Phases 1, 2, 3, 4, 5, and 6 are **100% COMPLETE & VERIFIED**.
 
 ---
 
-## ✅ Phase 1 — Bug Fixes (Completed 2026-11-15 ~18:45 IST)
+## 📋 Phase-by-Phase Execution Summary
 
-**Commit:** `1dd6f06` *(bundled with Phases 2-4)*
-
-**Files changed:**
-
-| File | Change Made |
-|------|-------------|
-| `Server/models/bookmark.js` | Widened platform `enum` from `['Codeforces', 'LeetCode']` to `['Codeforces', 'LeetCode', 'Other']` |
-| `Server/controllers/dashboardController.js` | Replaced fragile fixed-index `stats[0].count` / `stats[1].count` etc. with `stats.find(s => s.difficulty === level)?.count || 0` helper |
-| `Server/middleware/authMiddleware.js` | Added `return` before `res.status(401).json(...)` in catch block to prevent double-response crash |
-| `Server/index.js` | Changed `const PORT = 5000` → `const PORT = process.env.PORT || 5000` |
-| `Server/index.js` | Changed `app.use(cors())` → `app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }))` |
-| `Server/package.json` | Removed dead `"recharts": "^3.10.0"` from server dependencies |
-
-**Verification:** All 6 fixes independently verified by `verify1` agent reading files and confirming each change.
+| Phase | Description | Status | Verification Result |
+|---|---|---|---|
+| **Phase 1** | Bug fixes on base JavaScript server | ✅ Completed | All 6 bug fixes independently verified |
+| **Phase 2** | Monolith TypeScript migration (`Server/src/`) | ✅ Completed | `tsc --noEmit` passed with 0 errors |
+| **Phase 3** | Redis caching layer (`ioredis`, 300s TTL) | ✅ Completed | Cached CF & LC with graceful fallback |
+| **Phase 4** | Redis Sorted Set leaderboard (`/api/leaderboard`) | ✅ Completed | ZSET operations tied to cache misses |
+| **Phase 5** | Microservice split behind API Gateway (6 services) | ✅ Completed | All 6 services compile & build cleanly |
+| **Phase 6** | Frontend TypeScript migration & Leaderboard UI | ✅ Completed | React 19 TS migration, parallel fetch, Vite build pass |
+| **Phase 7** | Docker containerization & Docker Compose | ⏸️ Pending | Mandatory plan review before execution |
 
 ---
 
-## ✅ Phase 2 — TypeScript Migration (Server) (Completed 2026-11-15 ~18:50 IST)
+## 🔍 Detailed Record of Changes
 
-**New files created under `Server/src/`:**
-
-```
-Server/
-├── tsconfig.json              (target: ES2020, module: commonjs, strict: true)
-└── src/
-    ├── types/
-    │   └── index.ts           (IUser extends Document; AuthRequest extends Request with user?: IUser)
-    ├── config/
-    │   └── db.ts              (Mongoose connect with IPv4 family:4)
-    ├── models/
-    │   ├── User.ts            (IUser schema with TypeScript generics)
-    │   └── Bookmark.ts        (IBookmark schema, includes 'Other' in enum)
-    ├── middleware/
-    │   └── authMiddleware.ts  (JWT verify, attaches req.user, return guards on all 401s)
-    ├── controllers/
-    │   ├── userController.ts
-    │   ├── codeforcesController.ts
-    │   ├── leetcodeController.ts
-    │   ├── bookmarkController.ts
-    │   └── dashboardController.ts
-    ├── routes/
-    │   ├── userRoutes.ts
-    │   ├── codeforcesRoutes.ts
-    │   ├── leetcodeRoutes.ts
-    │   ├── bookmarkRoutes.ts
-    │   └── dashboardRoutes.ts
-    └── index.ts               (entry point; uses import 'dotenv/config')
-```
-
-**Deviations from spec (intentional, correct):**
-- Used `tsx` instead of `ts-node` — TypeScript 7.x ships a redesigned compiler API that `ts-node@10` cannot parse; `tsx` is compatible with all TS versions.
-- Dev script: `nodemon --watch src -e ts --exec tsx src/index.ts`
-
-**Package.json scripts:**
-```json
-"scripts": {
-  "start": "node dist/index.js",
-  "dev": "nodemon --watch src -e ts --exec tsx src/index.ts",
-  "build": "tsc"
-}
-```
-
-**Verification:** `npx tsc --noEmit` exited with code 0 (zero errors). Independently verified by `verify2` agent.
+### ✅ Phase 1 — Bug Fixes (Commit `1dd6f06`)
+- **`Server/models/bookmark.js`:** Widened platform `enum` to `['Codeforces', 'LeetCode', 'Other']` so the dropdown selection `"Other"` doesn't fail Mongoose validation.
+- **`Server/controllers/dashboardController.js`:** Replaced hardcoded index lookups (`stats[0].count`, etc.) with dynamic difficulty matching: `stats.find(s => s.difficulty === level)?.count || 0`.
+- **`Server/middleware/authMiddleware.js`:** Added explicit `return` before `res.status(401).json(...)` in the catch-block to prevent double-response crashes.
+- **`Server/index.js`:** Changed `PORT` to respect `process.env.PORT || 5000`.
+- **`Server/index.js`:** Configured CORS origin using `process.env.CLIENT_URL || 'http://localhost:5173'`.
+- **`Server/package.json`:** Removed unused client-only dependency `"recharts": "^3.10.0"`.
 
 ---
 
-## ✅ Phase 3 — Redis Cache Layer (Completed 2026-11-15 ~18:57 IST)
-
-**New files:**
-
-| File | Purpose |
-|------|---------|
-| `Server/src/config/redisClient.ts` | ioredis instance; uses `REDIS_HOST` / `REDIS_PORT` env vars (defaults `127.0.0.1:6379`); bounded retry (5 attempts max); `lazyConnect: true` so server does not crash if Redis is offline at startup |
-| `Server/src/utils/cache.ts` | Generic `getOrSetCache<T>(key, ttlSeconds, fetcher)` — tries Redis GET, on miss calls fetcher, saves result with EX TTL; graceful fallback to fetcher if Redis errors |
-
-**Cache keys:**
-- Codeforces stats: `cf:stats:{handle}` — TTL **300 seconds (5 minutes)**
-- LeetCode stats: `lc:stats:{handle}` — TTL **300 seconds (5 minutes)**
-
-**Updated controllers:**
-- `codeforcesController.ts` — full CF stats (rating, rank, maxRating, ratingHistory last 15) wrapped in cache; exports `fetchCodeforcesStats` for dashboard reuse
-- `leetcodeController.ts` — full LC stats (solved counts + contest history) wrapped in cache; exports `fetchLeetCodeStats`
-
-**Dependency added:** `ioredis` (ships its own TypeScript types)
+### ✅ Phase 2 — Server TypeScript Migration (Commit `1dd6f06`)
+- Restructured `Server/` into `Server/src/` with modular layout (`types/`, `config/`, `models/`, `middleware/`, `controllers/`, `routes/`).
+- Created `Server/tsconfig.json` (`ES2020`, `commonjs`, `strict: true`, `outDir: ./dist`, `rootDir: ./src`).
+- Added strong typings:
+  - `IUser` extending Mongoose `Document` with `_id: Types.ObjectId`.
+  - `IBookmark` extending Mongoose `Document`.
+  - `AuthRequest` extending Express `Request` with optional `user?: IUser` and `userId?: string`.
+- Integrated `tsx` runner with nodemon for hot-reloading TypeScript in development.
+- Verified with `npx tsc --noEmit` (exit code 0).
 
 ---
 
-## ✅ Phase 4 — Redis Leaderboard (Sorted Sets) (Completed 2026-11-15 ~18:57 IST)
-
-**New files:**
-
-| File | Purpose |
-|------|---------|
-| `Server/src/utils/leaderboard.ts` | `updateLeaderboardScore(platform, member, score)` — ZADD absolute score; `getTopN(platform, n)` — ZREVRANGE WITHSCORES; `getUserRank(platform, member)` — ZREVRANK + ZSCORE 1-based |
-| `Server/src/controllers/leaderboardController.ts` | `getLeaderboard`: reads `platform` query (default `codeforces`), `limit` (default 10, capped at 50); `getUserLeaderboardRank` returns current user's rank |
-| `Server/src/routes/leaderboardRoutes.ts` | `GET /` and `GET /rank`, both behind `protect` middleware |
-
-**Redis ZSET keys:**
-- `leaderboard:codeforces` — member = username, score = current CF rating
-- `leaderboard:leetcode` — member = username, score = total problems solved
-
-**Key design decision:** `updateLeaderboardScore` called **only inside the cache-miss fetcher** — scores update when real data is freshly fetched (~every 5 min), not on every request.
-
-**Route mounted:** `GET /api/leaderboard?platform=codeforces|leetcode&limit=10`
-
-**Git commit:** `1dd6f06` — `feat: complete Phase 1-4` — 50 files changed, 3035 insertions.
+### ✅ Phase 3 — Redis Cache Layer (Commit `1dd6f06`)
+- Installed `ioredis` with built-in TypeScript definitions.
+- Created `Server/src/config/redisClient.ts`:
+  - Connects using `REDIS_HOST` (default `127.0.0.1`) and `REDIS_PORT` (default `6379`).
+  - Added bounded retry strategy (5 attempts) and `lazyConnect: true` so the server never crashes if Redis is offline during cold starts or offline development.
+- Created generic caching utility `Server/src/utils/cache.ts`:
+  - `getOrSetCache<T>(key, ttlSeconds, fetcher)`: Fetches cached data from Redis; on cache miss, executes fetcher, caches result with expiration, and returns fresh data. Includes try-catch fallback.
+- Wrapped third-party calls:
+  - Codeforces stats: `cf:stats:${handle}` with **300s TTL**.
+  - LeetCode stats: `lc:stats:${handle}` with **300s TTL**.
 
 ---
 
-## 🔄 Phase 5 — Microservice Split (In Progress as of 2026-11-16 02:08 IST)
+### ✅ Phase 4 — Redis Leaderboard on Sorted Sets (Commit `1dd6f06`)
+- Created `Server/src/utils/leaderboard.ts`:
+  - `updateLeaderboardScore(platform, member, score)`: Executes `ZADD` (absolute score updates).
+  - `getTopN(platform, n)`: Executes `ZREVRANGE ... WITHSCORES` and formats pairs into `{ member, score }[]`.
+  - `getUserRank(platform, member)`: Queries `ZREVRANK` (1-based rank) and `ZSCORE`.
+- Key performance optimization: Leaderboard updates trigger **strictly on cache misses**, avoiding redundant writes on every repeated read.
+- Created controller `leaderboardController.ts` and routes `GET /api/leaderboard` (with limit capped at 50) and `GET /api/leaderboard/rank`.
+- Verified compilation and route handling.
 
-**Target structure:**
-```
+---
+
+### ✅ Phase 5 — Microservice Split Behind API Gateway (Commit `42f1e53`)
+Deconstructed the monolith into an **API Gateway** and **5 specialized internal microservices**:
+
+```text
 CP_Aggregator/
-├── gateway/           # Port 5000 — only public entrypoint, JWT verification
-│   └── src/
+├── gateway/                        # Port 5000 (Public Entrypoint)
+│   ├── src/
+│   │   ├── middleware/protect.ts   # Stateless JWT verification -> sets req.userId
+│   │   ├── types/index.ts          # GatewayRequest interface
+│   │   └── index.ts                # Route proxies + Dashboard orchestrator (Promise.allSettled)
+│   ├── .env
+│   ├── tsconfig.json
+│   └── package.json
 ├── services/
-│   ├── user-service/        # Port 5001 — User model + Mongo + GET /internal/users/:id
-│   ├── codeforces-service/  # Port 5002 — Redis-cached CF stats
-│   ├── leetcode-service/    # Port 5003 — Redis-cached LC stats
-│   ├── bookmark-service/    # Port 5004 — Bookmark model + Mongo, scoped by x-user-id
-│   └── leaderboard-service/ # Port 5005 — Redis Sorted Sets
-├── package.json       # Root concurrently dev runner
-└── Client/            # Frontend (unchanged until Phase 6)
+│   ├── user-service/               # Port 5001: Owns User collection & MongoDB connection
+│   │   ├── src/models/User.ts      # Mongoose User schema
+│   │   ├── src/config/db.ts        # Database connection
+│   │   └── src/index.ts            # Auth routes + GET /internal/users/:id
+│   ├── codeforces-service/         # Port 5002: Redis-cached Codeforces statistics
+│   │   ├── src/utils/cache.ts      # 300s TTL cache
+│   │   └── src/index.ts            # Dispatches score updates to leaderboard-service via HTTP
+│   ├── leetcode-service/           # Port 5003: Redis-cached LeetCode statistics
+│   │   ├── src/utils/cache.ts      # 300s TTL cache
+│   │   └── src/index.ts            # Dispatches score updates to leaderboard-service via HTTP
+│   ├── bookmark-service/           # Port 5004: Owns Bookmark collection & MongoDB connection
+│   │   ├── src/models/Bookmark.ts  # Mongoose Bookmark schema
+│   │   ├── src/config/db.ts        # Database connection
+│   │   └── src/index.ts            # CRUD operations scoped by x-user-id header
+│   └── leaderboard-service/        # Port 5005: Redis Sorted Sets (leaderboard:codeforces & leetcode)
+│       ├── src/utils/leaderboard.ts# ZADD, ZREVRANGE, ZREVRANK utilities
+│       └── src/index.ts            # POST /internal/update, GET /leaderboard, GET /internal/rank
+├── tsconfig.base.json              # Shared root TypeScript configuration
+├── package.json                    # Root concurrently runner
+└── .gitignore                      # Clean ignore rules for node_modules and build artifacts
 ```
 
----
-
-## 🔄 Phase 6 — Frontend TypeScript + Leaderboard UI (In Progress)
-
-**Changes planned:**
-- `.jsx` → `.tsx`, `.js` → `.ts` throughout `Client/src/`
-- Replace sequential `await` calls in Dashboard with `Promise.all([...])` (parallel fetching)
-- New TypeScript interfaces: `PlatformStats`, `DashboardResponse`, `LeaderboardEntry`
-- Split `Dashboard.jsx` → `StatCard.tsx`, `BookmarkForm.tsx`, `BookmarkList.tsx`, `LeaderboardWidget.tsx`, `pages/Dashboard.tsx`
-- New `pages/Leaderboard.tsx` at route `/leaderboard`
-- Nav link in Dashboard header to Leaderboard page
+**Key Architectural Features in Phase 5:**
+1. **Stateless Gateway Auth:** The Gateway's `protect` middleware decodes the JWT and attaches `req.userId`. It forwards an `x-user-id` HTTP header to internal services. The Gateway itself requires no database connection.
+2. **Dashboard Orchestrator:** The Gateway coordinates the aggregated dashboard via `Promise.allSettled`:
+   - Fetches profile from `user-service` (`GET /internal/users/:id`).
+   - Concurrently queries `bookmark-service`, `codeforces-service`, and `leetcode-service`.
+3. **Decoupled Leaderboard Updates:** Neither `codeforces-service` nor `leetcode-service` writes directly to Redis leaderboards; on cache misses, they make an internal HTTP call: `POST ${LEADERBOARD_SERVICE_URL}/internal/update`.
+4. **Zero-Error Verification:**
+   - Ran `tsc --noEmit` across `gateway` and all 5 services: **All passed with 0 errors**.
+   - Ran `npm run build:all` from the root: **All services compiled cleanly into `dist/`**.
 
 ---
 
-## ⏳ Phase 7 — Docker Compose (Pending — plan review required before execution)
+### ✅ Phase 6 — Frontend TypeScript & Leaderboard UI (Commit `42f1e53`)
+Transformed the frontend into a modern, strongly-typed React 19 single-page application:
 
-Multi-stage Dockerfiles per service + `docker-compose.yml` at repo root. Only gateway port 5000 exposed to host.
+1. **Complete TypeScript Migration:**
+   - Added `Client/tsconfig.json` (`ES2020`, `bundler` resolution, `react-jsx`).
+   - Renamed `vite.config.js` → `Client/vite.config.ts`.
+   - Updated `Client/index.html` to reference `/src/main.tsx`.
+   - Deleted all legacy JavaScript files (`App.jsx`, `api.js`, `main.jsx`, `Dashboard.jsx`, `Login.jsx`, `Register.jsx`, `RatingChart.jsx`).
+2. **Defined Core Domain Interfaces (`Client/src/types/index.ts`):**
+   - `RatingHistoryEntry`, `CodeforcesStats`, `LeetCodeStats`, `BookmarkItem`, `UserProfile`, `DashboardResponse`, `LeaderboardEntry`, `LeaderboardResponse`.
+3. **Parallel Dashboard Requests:**
+   - Replaced sequential `await` calls in `Dashboard.tsx` with:
+     ```typescript
+     const [dashboardResponse, bookmarksResponse] = await Promise.all([
+       API.get('/dashboard'),
+       API.get('/bookmarks'),
+     ]);
+     ```
+4. **Modularized Component Hierarchy:**
+   - `components/StatCard.tsx`: Reusable card for both Codeforces and LeetCode ratings and stats.
+   - `components/BookmarkForm.tsx`: Clean form supporting problem submission with Codeforces, LeetCode, or Other.
+   - `components/BookmarkList.tsx`: Problem repository list with direct external links and delete action.
+   - `components/LeaderboardWidget.tsx`: Dashboard widget previewing Top 5 rankings for Codeforces and LeetCode.
+   - `pages/Dashboard.tsx`: High-level dashboard composer.
+5. **Dedicated Global Leaderboard Page (`Client/src/pages/Leaderboard.tsx`):**
+   - Accessible at `/leaderboard` (with back-navigation to Dashboard).
+   - Dynamic platform toggle between Codeforces and LeetCode.
+   - Ranked podium medals (`🥇`, `🥈`, `🥉`) and tabular scores.
+6. **Frontend Build Verification:**
+   - `npx tsc --noEmit` passed with 0 errors.
+   - `npm run build` completed successfully (Vite generated production distribution in `dist/assets/`).
 
 ---
 
-## Environment Variables Reference
+## 🚀 How to Access and Test the Application
 
-| Variable | Used By | Default / Example |
+### 1. Prerequisites
+- **Node.js** v20+ and **npm**
+- **MongoDB** (running locally on port 27017 or using MongoDB Atlas via `MONGO_URI` in `.env`)
+- **Redis** (running locally on port 6379, e.g., via `redis-server` or `sudo service redis-server start`)
+
+---
+
+### 2. Running All Backend Microservices
+
+From the repository root, start all 6 services concurrently with a single command:
+
+```bash
+cd /home/anant/workspace/Projects/CP_Aggregator
+npm run dev
+```
+
+This starts:
+| Service | Local URL / Port | Role |
 |---|---|---|
-| `PORT` | every service | 5000–5005 |
-| `MONGO_URI` | user-service, bookmark-service | MongoDB Atlas connection string |
-| `JWT_SECRET` | gateway, user-service | long random string |
-| `REDIS_HOST` | cf-service, lc-service, leaderboard-service | `127.0.0.1` (dev) / `redis` (Docker) |
-| `REDIS_PORT` | same | `6379` |
-| `CLIENT_URL` | gateway (CORS) | `http://localhost:5173` |
-| `USER_SERVICE_URL` | gateway | `http://localhost:5001` (dev) |
-| `CF_SERVICE_URL` | gateway | `http://localhost:5002` (dev) |
-| `LC_SERVICE_URL` | gateway | `http://localhost:5003` (dev) |
-| `BOOKMARK_SERVICE_URL` | gateway | `http://localhost:5004` (dev) |
-| `LEADERBOARD_SERVICE_URL` | gateway | `http://localhost:5005` (dev) |
+| **API Gateway** | `http://localhost:5000` | Public API & JWT verification |
+| **User Service** | `http://localhost:5001` | Auth & User Profiles |
+| **Codeforces Service** | `http://localhost:5002` | Codeforces Stats (Redis Cache) |
+| **LeetCode Service** | `http://localhost:5003` | LeetCode Stats (Redis Cache) |
+| **Bookmark Service** | `http://localhost:5004` | Bookmark Repository |
+| **Leaderboard Service** | `http://localhost:5005` | Redis Leaderboards |
+
+---
+
+### 3. Running the Frontend Client
+
+In a separate terminal, start the Vite development server:
+
+```bash
+cd /home/anant/workspace/Projects/CP_Aggregator/Client
+npm run dev
+```
+
+Open your browser at:  
+👉 **`http://localhost:5173`**
+
+---
+
+### 4. Step-by-Step Verification Walkthrough
+
+1. **User Registration & Login:**
+   - Navigate to `http://localhost:5173/register` and create an account.
+   - Log in at `http://localhost:5173/login`. You will be redirected to the Dashboard (`/`).
+2. **Link Handles:**
+   - Click **"Edit Handles"** on the Dashboard.
+   - Enter a Codeforces handle (e.g., `tourist` or your handle) and a LeetCode handle.
+   - Click **"Save & Sync"**.
+3. **Verify Parallel Requests & Stats:**
+   - Open your browser's Developer Tools (`F12` → **Network** tab).
+   - Refresh the page: observe `/api/dashboard` and `/api/bookmarks` firing **simultaneously in parallel**.
+   - Check the Codeforces card (rating, rank, contest rating chart) and LeetCode card (solved problem counts by difficulty).
+4. **Verify Redis Caching:**
+   - Run `redis-cli ping` → returns `PONG`.
+   - Run `redis-cli KEYS "cf:stats:*"` → you should see the cached handle.
+   - Run `redis-cli TTL "cf:stats:<handle>"` → returns remaining seconds (under 300).
+5. **Verify Leaderboard:**
+   - Click the **"🏆 Leaderboard"** button in the dashboard header or visit `http://localhost:5173/leaderboard`.
+   - Toggle between **Codeforces** and **LeetCode** tabs to view rankings.
+   - Run `redis-cli ZRANGE leaderboard:codeforces 0 -1 WITHSCORES` in terminal to confirm entries in the Redis Sorted Set.
+6. **Verify Bookmarks:**
+   - Add a problem with platform **"Other"** (e.g., AtCoder, CSES) and click Save.
+   - Confirm it appears in the list and persists across page reloads without errors.
