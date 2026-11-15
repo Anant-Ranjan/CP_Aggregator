@@ -1,0 +1,13 @@
+{
+  "name": "cp-aggregator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"gateway,user,cf,lc,bookmark,leaderboard\" -c \"cyan,green,blue,yellow,magenta,red\" \"npm run dev --prefix gateway\" \"npm run dev --prefix services/user-service\" \"npm run dev --prefix services/codeforces-service\" \"npm run dev --prefix services/leetcode-service\" \"npm run dev --prefix services/bookmark-service\" \"npm run dev --prefix services/leaderboard-service\"",
+    "build:all": "npm run build --prefix gateway && npm run build --prefix services/user-service && npm run build --prefix services/codeforces-service && npm run build --prefix services/leetcode-service && npm run build --prefix services/bookmark-service && npm run build --prefix services/leaderboard-service"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^7.0.2"
+  }
+}
