@@ -19,6 +19,7 @@
 | **Phase 4** | Redis Sorted Set leaderboard (`/api/leaderboard`) | ✅ Completed | ZSET operations tied to cache misses |
 | **Phase 5** | Microservice split behind API Gateway (6 services) | ✅ Completed | All 6 services compile & build cleanly |
 | **Phase 6** | Frontend TypeScript migration & Leaderboard UI | ✅ Completed | React 19 TS migration, parallel fetch, Vite build pass |
+| **Active Runtime** | Microservices & Client local background execution | 🟢 LIVE | All 6 services (5000-5005) & Client (5173) running |
 | **Phase 7** | Docker containerization & Docker Compose | ⏸️ Pending | Mandatory plan review before execution |
 
 ---
