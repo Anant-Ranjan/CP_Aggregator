@@ -154,6 +154,23 @@ Transformed the frontend into a modern, strongly-typed React 19 single-page appl
 
 ---
 
+## 🔑 Pre-Seeded Demo Account & Authentication Fix
+
+Due to local network DNS resolution restrictions on the MongoDB Atlas cluster (`ac-pmup8za-shard-00-00.cgdozac.mongodb.net`), a hybrid resilient storage layer was added to `user-service` and `bookmark-service`:
+- **If MongoDB is connected**: All operations persist to MongoDB as usual.
+- **If MongoDB is offline/unreachable**: Seamlessly falls back to an in-memory repository with pre-seeded demo data, allowing registration and login to work immediately without network delays.
+
+### Demo Credentials:
+- **Email:** `demo@cpaggregator.com`
+- **Password:** `password123`
+- **Username:** `demo_coder`
+- **Pre-linked Handles:** Codeforces: `tourist`, LeetCode: `neal_wu`
+- **Sample Bookmarks:** Pre-populated with LeetCode ("Two Sum"), Codeforces ("Watermelon"), and Other/CSES ("Weird Algorithm").
+
+*(You can also sign up with any new account at `/register` and it will work instantly!)*
+
+---
+
 ## 🚀 How to Access and Test the Application
 
 ### 1. Prerequisites
