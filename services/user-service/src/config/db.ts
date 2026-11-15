@@ -5,8 +5,7 @@ const connectDB = async (): Promise<void> => {
     const conn = await mongoose.connect(process.env.MONGO_URI as string, { family: 4 });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`Error: ${(error as Error).message}`);
-    process.exit(1);
+    console.error(`MongoDB connection error: ${(error as Error).message}`);
   }
 };
 
